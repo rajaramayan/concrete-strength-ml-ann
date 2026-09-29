@@ -37,13 +37,10 @@ st.set_page_config(
 # Custom CSS for modern visual design
 st.markdown("""
 <style>
-    /* Global Styles & Fonts */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
-    
-    /* Hero Header Styling */
     .hero-banner {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
         border: 1px solid #334155;
@@ -65,8 +62,6 @@ st.markdown("""
         margin-top: 8px;
         margin-bottom: 0;
     }
-    
-    /* Card Container */
     .metric-card {
         background: rgba(30, 41, 59, 0.7);
         backdrop-filter: blur(10px);
@@ -93,8 +88,6 @@ st.markdown("""
         color: #94a3b8;
         font-weight: 600;
     }
-    
-    /* Highlight Badge */
     .badge-high {
         background: rgba(16, 185, 129, 0.15);
         color: #10b981;
@@ -122,8 +115,6 @@ st.markdown("""
         font-weight: 600;
         border: 1px solid rgba(245, 158, 11, 0.3);
     }
-    
-    /* Result Box */
     .result-box {
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
         border: 2px solid #3b82f6;
@@ -144,7 +135,10 @@ st.markdown("""
 # Helper function to load ANN weights / model
 def create_and_load_ann():
     if os.path.exists('ann_weights.joblib'):
-        return joblib.load('ann_weights.joblib')
+        try:
+            return joblib.load('ann_weights.joblib')
+        except Exception:
+            pass
     if keras is not None:
         model = keras.Sequential([
             keras.layers.Input(shape=(8,)),
@@ -215,14 +209,15 @@ page = st.sidebar.radio(
         "🔍 Feature Analysis & Sensitivity",
         "📁 Research Dataset Explorer",
         "ℹ️ Research Specs & Architecture"
-    ]
+    ],
+    key="navigation_page"
 )
 
 st.sidebar.markdown("---")
 st.sidebar.caption("🔬 **Research Focus**: ML & ANN Modeling for Concrete Strength Prediction")
 st.sidebar.caption("✨ **Top Model**: XGBoost ($R^2 = 0.941$)")
 
-# Pure NumPy ANN inference
+# Vectorized Pure NumPy ANN inference
 def predict_ann(input_df):
     scaled = ann_scaler.transform(input_df) if ann_scaler else input_df.values
     ann_obj = models.get('Artificial Neural Network')
@@ -232,21 +227,26 @@ def predict_ann(input_df):
             out = np.maximum(0, np.dot(out, W) + b)
         W_last, b_last = ann_obj[-1]
         out = np.dot(out, W_last) + b_last
-        return float(out[0, 0]) if out.ndim > 1 else float(out[0])
+        res = out.flatten()
+        return res if len(res) > 1 else float(res[0])
     elif ann_obj is not None and keras is not None:
-        return float(ann_obj.predict(scaled, verbose=0)[0, 0])
-    return 0.0
+        res = ann_obj.predict(scaled, verbose=0).flatten()
+        return res if len(res) > 1 else float(res[0])
+    return np.zeros(len(input_df)) if len(input_df) > 1 else 0.0
 
-# Prediction Helper Function
+# Vectorized Prediction Helper Function
 def predict_strength(input_df, model_name):
     if model_name == "Hybrid XGBoost + ANN":
-        xgb_p = float(models['XGBoost'].predict(input_df)[0])
+        xgb_p = models['XGBoost'].predict(input_df)
         ann_p = predict_ann(input_df)
-        return (xgb_p + ann_p) / 2.0
+        res = (xgb_p + ann_p) / 2.0
+        return res if len(res) > 1 else float(res[0])
     elif model_name == "Artificial Neural Network":
-        return predict_ann(input_df)
+        res = predict_ann(input_df)
+        return res if isinstance(res, np.ndarray) and len(res) > 1 else float(res) if isinstance(res, (int, float, np.number)) else float(res[0])
     else:
-        return float(models[model_name].predict(input_df)[0])
+        res = models[model_name].predict(input_df)
+        return res if len(res) > 1 else float(res[0])
 
 def get_concrete_category(strength):
     if strength < 20:
@@ -271,66 +271,59 @@ if page == "🧪 Interactive Predictor":
     
     col_inputs, col_results = st.columns([1.6, 1.1])
     
+    # Initialize session state for input keys cleanly
+    if 'mix_cement' not in st.session_state:
+        st.session_state.mix_cement = 280.0
+    if 'mix_slag' not in st.session_state:
+        st.session_state.mix_slag = 70.0
+    if 'mix_flyash' not in st.session_state:
+        st.session_state.mix_flyash = 50.0
+    if 'mix_water' not in st.session_state:
+        st.session_state.mix_water = 180.0
+    if 'mix_sp' not in st.session_state:
+        st.session_state.mix_sp = 6.0
+    if 'mix_ca' not in st.session_state:
+        st.session_state.mix_ca = 980.0
+    if 'mix_fa' not in st.session_state:
+        st.session_state.mix_fa = 770.0
+    if 'mix_age' not in st.session_state:
+        st.session_state.mix_age = 28
+
+    def apply_preset(c, s, f, w, sp, ca, fa, a):
+        st.session_state.mix_cement = float(c)
+        st.session_state.mix_slag = float(s)
+        st.session_state.mix_flyash = float(f)
+        st.session_state.mix_water = float(w)
+        st.session_state.mix_sp = float(sp)
+        st.session_state.mix_ca = float(ca)
+        st.session_state.mix_fa = float(fa)
+        st.session_state.mix_age = int(a)
+
     with col_inputs:
         st.subheader("⚙️ Concrete Mix Parameters")
         
-        # Preset formulations
         st.caption("⚡ Quick Preset Mix Templates:")
         preset_cols = st.columns(4)
         
-        # Default state initialization
-        if 'cement' not in st.session_state:
-            st.session_state.cement = 280.0
-            st.session_state.slag = 70.0
-            st.session_state.flyash = 50.0
-            st.session_state.water = 180.0
-            st.session_state.superplasticizer = 6.0
-            st.session_state.coarse_agg = 980.0
-            st.session_state.fine_agg = 770.0
-            st.session_state.age = 28
-            
-        if preset_cols[0].button("Standard 28D"):
-            st.session_state.cement, st.session_state.slag, st.session_state.flyash = 280.0, 70.0, 50.0
-            st.session_state.water, st.session_state.superplasticizer = 180.0, 6.0
-            st.session_state.coarse_agg, st.session_state.fine_agg = 980.0, 770.0
-            st.session_state.age = 28
-            st.rerun()
-            
-        if preset_cols[1].button("High-Strength"):
-            st.session_state.cement, st.session_state.slag, st.session_state.flyash = 450.0, 100.0, 0.0
-            st.session_state.water, st.session_state.superplasticizer = 150.0, 12.0
-            st.session_state.coarse_agg, st.session_state.fine_agg = 950.0, 720.0
-            st.session_state.age = 28
-            st.rerun()
-            
-        if preset_cols[2].button("Eco Fly-Ash"):
-            st.session_state.cement, st.session_state.slag, st.session_state.flyash = 200.0, 0.0, 160.0
-            st.session_state.water, st.session_state.superplasticizer = 165.0, 8.0
-            st.session_state.coarse_agg, st.session_state.fine_agg = 1000.0, 790.0
-            st.session_state.age = 56
-            st.rerun()
-
-        if preset_cols[3].button("Early 7-Day"):
-            st.session_state.cement, st.session_state.slag, st.session_state.flyash = 380.0, 120.0, 0.0
-            st.session_state.water, st.session_state.superplasticizer = 175.0, 9.0
-            st.session_state.coarse_agg, st.session_state.fine_agg = 920.0, 750.0
-            st.session_state.age = 7
-            st.rerun()
+        preset_cols[0].button("Standard 28D", on_click=apply_preset, args=(280.0, 70.0, 50.0, 180.0, 6.0, 980.0, 770.0, 28))
+        preset_cols[1].button("High-Strength", on_click=apply_preset, args=(450.0, 100.0, 0.0, 150.0, 12.0, 950.0, 720.0, 28))
+        preset_cols[2].button("Eco Fly-Ash", on_click=apply_preset, args=(200.0, 0.0, 160.0, 165.0, 8.0, 1000.0, 790.0, 56))
+        preset_cols[3].button("Early 7-Day", on_click=apply_preset, args=(380.0, 120.0, 0.0, 175.0, 9.0, 920.0, 750.0, 7))
 
         st.markdown("---")
         
         i_col1, i_col2 = st.columns(2)
         with i_col1:
-            cement = st.number_input("Cement (kg/m³)", 100.0, 540.0, value=st.session_state.cement, step=5.0)
-            slag = st.number_input("Blast Furnace Slag (kg/m³)", 0.0, 360.0, value=st.session_state.slag, step=5.0)
-            flyash = st.number_input("Fly Ash (kg/m³)", 0.0, 200.0, value=st.session_state.flyash, step=5.0)
-            water = st.number_input("Water (kg/m³)", 120.0, 250.0, value=st.session_state.water, step=2.0)
+            cement = st.number_input("Cement (kg/m³)", 100.0, 540.0, step=5.0, key="mix_cement")
+            slag = st.number_input("Blast Furnace Slag (kg/m³)", 0.0, 360.0, step=5.0, key="mix_slag")
+            flyash = st.number_input("Fly Ash (kg/m³)", 0.0, 200.0, step=5.0, key="mix_flyash")
+            water = st.number_input("Water (kg/m³)", 120.0, 250.0, step=2.0, key="mix_water")
             
         with i_col2:
-            superplasticizer = st.number_input("Superplasticizer (kg/m³)", 0.0, 35.0, value=st.session_state.superplasticizer, step=0.5)
-            coarse_agg = st.number_input("Coarse Aggregate (kg/m³)", 800.0, 1150.0, value=st.session_state.coarse_agg, step=10.0)
-            fine_agg = st.number_input("Fine Aggregate (kg/m³)", 590.0, 950.0, value=st.session_state.fine_agg, step=10.0)
-            age = st.slider("Curing Age (Days)", 1, 365, value=st.session_state.age)
+            superplasticizer = st.number_input("Superplasticizer (kg/m³)", 0.0, 35.0, step=0.5, key="mix_sp")
+            coarse_agg = st.number_input("Coarse Aggregate (kg/m³)", 800.0, 1150.0, step=10.0, key="mix_ca")
+            fine_agg = st.number_input("Fine Aggregate (kg/m³)", 590.0, 950.0, step=10.0, key="mix_fa")
+            age = st.slider("Curing Age (Days)", 1, 365, key="mix_age")
 
         # Derived metrics calculation
         total_binder = cement + slag + flyash
@@ -355,12 +348,12 @@ if page == "🧪 Interactive Predictor":
             "SVR",
             "Linear Regression"
         ]
-        selected_model = st.selectbox("Select ML / DL Model:", model_options, index=0)
+        selected_model = st.selectbox("Select ML / DL Model:", model_options, index=0, key="selected_model_p1")
         
         input_data = pd.DataFrame([[cement, slag, flyash, water, superplasticizer, coarse_agg, fine_agg, age]],
                                   columns=feature_names)
         
-        predicted_strength = predict_strength(input_data, selected_model)
+        predicted_strength = float(predict_strength(input_data, selected_model))
         category_title, badge_class, usage_desc = get_concrete_category(predicted_strength)
         
         st.markdown(f"""
@@ -381,10 +374,9 @@ if page == "🧪 Interactive Predictor":
         # Calculate prediction across all available models
         all_preds = {}
         for m in model_options:
-            all_preds[m] = predict_strength(input_data, m)
+            all_preds[m] = float(predict_strength(input_data, m))
             
         pred_df = pd.DataFrame(list(all_preds.items()), columns=['Model', 'Predicted Strength (MPa)'])
-        pred_df['Difference vs Selected (MPa)'] = pred_df['Predicted Strength (MPa)'] - predicted_strength
         
         fig_comp = px.bar(
             pred_df, 
@@ -415,7 +407,7 @@ if page == "🧪 Interactive Predictor":
         
         st.download_button("📥 Download Sample CSV Template", sample_download.to_csv(index=False), "sample_concrete_mixes.csv", "text/csv")
         
-        uploaded_file = st.file_uploader("Upload Concrete Data CSV", type=['csv'])
+        uploaded_file = st.file_uploader("Upload Concrete Data CSV", type=['csv'], key="batch_csv_uploader")
         if uploaded_file:
             user_batch_df = pd.read_csv(uploaded_file)
             missing_cols = [c for c in feature_names if c not in user_batch_df.columns]
@@ -425,12 +417,11 @@ if page == "🧪 Interactive Predictor":
                 st.success(f"Successfully loaded {len(user_batch_df)} rows for batch prediction!")
                 
                 results_df = user_batch_df.copy()
+                batch_inputs = user_batch_df[feature_names]
+                
                 for m in model_options:
-                    preds_list = []
-                    for idx, row in user_batch_df[feature_names].iterrows():
-                        row_df = pd.DataFrame([row.values], columns=feature_names)
-                        preds_list.append(predict_strength(row_df, m))
-                    results_df[f"Pred_{m} (MPa)"] = preds_list
+                    preds_batch = predict_strength(batch_inputs, m)
+                    results_df[f"Pred_{m} (MPa)"] = np.round(preds_batch, 2)
                     
                 st.dataframe(results_df.head(10), use_container_width=True)
                 
@@ -563,7 +554,6 @@ elif page == "📊 Model Comparison & Benchmarks":
                 color_continuous_scale='Plasma'
             )
             
-            # Identity line y = x
             min_val = min(test_pred_df['Actual Strength'].min(), test_pred_df['Hybrid Predicted Strength'].min())
             max_val = max(test_pred_df['Actual Strength'].max(), test_pred_df['Hybrid Predicted Strength'].max())
             fig_scat.add_trace(go.Scatter(
@@ -576,7 +566,6 @@ elif page == "📊 Model Comparison & Benchmarks":
             fig_scat.update_layout(height=480)
             st.plotly_chart(fig_scat, use_container_width=True)
             
-            # Residual Distribution
             fig_hist = px.histogram(
                 test_pred_df,
                 x='Absolute Error',
@@ -632,14 +621,14 @@ elif page == "🔍 Feature Analysis & Sensitivity":
         sim_w = st.slider("Water (kg/m³)", 130, 220, 180, key="sim_w")
         sim_sp = st.slider("Superplasticizer (kg/m³)", 0.0, 20.0, 6.0, key="sim_sp")
         
-        sim_model = st.selectbox("Simulation Model:", ["XGBoost", "Hybrid XGBoost + ANN", "Random Forest", "Artificial Neural Network"])
+        sim_model = st.selectbox("Simulation Model:", ["XGBoost", "Hybrid XGBoost + ANN", "Random Forest", "Artificial Neural Network"], key="sim_model")
         
         ages_range = np.arange(1, 181, 2)
-        sim_results = []
-        for a in ages_range:
-            sim_input = pd.DataFrame([[sim_c, 70.0, 50.0, sim_w, sim_sp, 950.0, 750.0, a]], columns=feature_names)
-            sim_results.append(predict_strength(sim_input, sim_model))
-            
+        sim_batch_df = pd.DataFrame([
+            [sim_c, 70.0, 50.0, sim_w, sim_sp, 950.0, 750.0, a] for a in ages_range
+        ], columns=feature_names)
+        
+        sim_results = predict_strength(sim_batch_df, sim_model)
         sim_curve_df = pd.DataFrame({'Age (Days)': ages_range, 'Predicted Strength (MPa)': sim_results})
         
         fig_curve = px.line(
@@ -659,11 +648,11 @@ elif page == "🔍 Feature Analysis & Sensitivity":
     st.write("Holding all other ingredients fixed, evaluate how altering water content impacts compressive strength.")
     
     water_range = np.linspace(130, 240, 30)
-    wc_results = []
-    for w in water_range:
-        sim_input = pd.DataFrame([[300.0, 70.0, 50.0, w, 6.0, 950.0, 750.0, 28]], columns=feature_names)
-        wc_results.append(predict_strength(sim_input, "XGBoost"))
-        
+    wc_batch_df = pd.DataFrame([
+        [300.0, 70.0, 50.0, w, 6.0, 950.0, 750.0, 28] for w in water_range
+    ], columns=feature_names)
+    
+    wc_results = predict_strength(wc_batch_df, "XGBoost")
     wc_df = pd.DataFrame({'Water Content (kg/m³)': water_range, 'Water/Cement Ratio': water_range / 300.0, 'Predicted Strength (MPa)': wc_results})
     
     fig_wc = px.line(
@@ -696,18 +685,20 @@ elif page == "📁 Research Dataset Explorer":
         st.markdown("##### Filter Data by Curing Age & Strength:")
         f_col1, f_col2 = st.columns(2)
         with f_col1:
-            age_filter = st.multiselect("Select Curing Age (Days):", sorted(test_pred_df['Age'].unique().tolist()), default=[7, 28, 90])
+            all_ages = sorted(test_pred_df['Age'].unique().tolist())
+            age_filter = st.multiselect("Select Curing Age (Days):", all_ages, default=[7, 28, 90], key="explorer_age_multiselect")
         with f_col2:
             min_str, max_str = st.slider("Filter Actual Strength (MPa):", 
                                          float(test_pred_df['Actual Strength'].min()), 
                                          float(test_pred_df['Actual Strength'].max()), 
-                                         (10.0, 80.0))
+                                         (10.0, 80.0),
+                                         key="explorer_str_slider")
             
-        filtered_df = test_pred_df[
-            (test_pred_df['Age'].isin(age_filter) if age_filter else True) &
-            (test_pred_df['Actual Strength'] >= min_str) &
-            (test_pred_df['Actual Strength'] <= max_str)
-        ]
+        cond_str = (test_pred_df['Actual Strength'] >= min_str) & (test_pred_df['Actual Strength'] <= max_str)
+        if age_filter:
+            filtered_df = test_pred_df[test_pred_df['Age'].isin(age_filter) & cond_str]
+        else:
+            filtered_df = test_pred_df[cond_str]
         
         st.dataframe(filtered_df, use_container_width=True)
         
@@ -718,7 +709,8 @@ elif page == "📁 Research Dataset Explorer":
                 "📥 Download Test Predictions CSV", 
                 test_pred_df.to_csv(index=False), 
                 "test_predictions.csv", 
-                "text/csv"
+                "text/csv",
+                key="btn_download_test_pred"
             )
         with d_col2:
             comp_df = datasets.get('comparison', pd.DataFrame())
@@ -726,7 +718,8 @@ elif page == "📁 Research Dataset Explorer":
                 "📥 Download Model Comparison CSV", 
                 comp_df.to_csv(index=False) if not comp_df.empty else "", 
                 "model_comparison.csv", 
-                "text/csv"
+                "text/csv",
+                key="btn_download_model_comp"
             )
         with d_col3:
             cv_df = datasets.get('cv', pd.DataFrame())
@@ -734,7 +727,8 @@ elif page == "📁 Research Dataset Explorer":
                 "📥 Download 10-Fold CV CSV", 
                 cv_df.to_csv(index=False) if not cv_df.empty else "", 
                 "10_fold_cross_validation.csv", 
-                "text/csv"
+                "text/csv",
+                key="btn_download_cv"
             )
 
 # ----------------------------------------------------

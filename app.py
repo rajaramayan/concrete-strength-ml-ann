@@ -1,3 +1,18 @@
+import sys
+import os
+import warnings
+
+# Alias legacy unpickling module for Gradient Boosting compatibility
+try:
+    import sklearn._loss.loss
+    sys.modules['_loss'] = sklearn._loss.loss
+except Exception:
+    try:
+        import sklearn._loss
+        sys.modules['_loss'] = sklearn._loss
+    except Exception:
+        pass
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,8 +23,6 @@ except ImportError:
     keras = None
 import plotly.express as px
 import plotly.graph_objects as go
-import os
-import warnings
 
 warnings.filterwarnings('ignore')
 

@@ -17,10 +17,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+
 try:
     import keras
 except ImportError:
     keras = None
+
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -199,7 +201,11 @@ datasets = load_datasets()
 feature_names = ['Cement', 'Blast Furnace Slag', 'Fly Ash', 'Water', 'Superplasticizer', 'Coarse Aggregate', 'Fine Aggregate', 'Age']
 
 # Sidebar Navigation
-st.sidebar.image("https://img.icons8.com/isometric/96/brick.png", width=64)
+try:
+    st.sidebar.image("https://img.icons8.com/isometric/96/brick.png", width=64)
+except Exception:
+    pass
+
 st.sidebar.title("Navigation")
 page = st.sidebar.radio(
     "Select Section:",
@@ -210,7 +216,7 @@ page = st.sidebar.radio(
         "📁 Research Dataset Explorer",
         "ℹ️ Research Specs & Architecture"
     ],
-    key="navigation_page"
+    key="navigation_page_selector"
 )
 
 st.sidebar.markdown("---")
@@ -258,10 +264,13 @@ def get_concrete_category(strength):
     else:
         return "Ultra-High Performance Concrete (UHPC)", "badge-high", "Specialized nuclear shielding, extreme load marine structures, skyscrapers."
 
+# Robust Substring Page Matching
+page_str = str(page)
+
 # ----------------------------------------------------
 # PAGE 1: INTERACTIVE PREDICTOR
 # ----------------------------------------------------
-if page == "🧪 Interactive Predictor":
+if "Predictor" in page_str:
     st.markdown("""
     <div class="hero-banner">
         <h1 class="hero-title">🏗️ Concrete Compressive Strength Predictor</h1>
@@ -271,7 +280,6 @@ if page == "🧪 Interactive Predictor":
     
     col_inputs, col_results = st.columns([1.6, 1.1])
     
-    # Initialize session state for input keys cleanly
     if 'mix_cement' not in st.session_state:
         st.session_state.mix_cement = 280.0
     if 'mix_slag' not in st.session_state:
@@ -371,7 +379,6 @@ if page == "🧪 Interactive Predictor":
         st.markdown("---")
         st.subheader("📊 Multi-Model Predictions Comparison")
         
-        # Calculate prediction across all available models
         all_preds = {}
         for m in model_options:
             all_preds[m] = float(predict_strength(input_data, m))
@@ -396,7 +403,6 @@ if page == "🧪 Interactive Predictor":
         )
         st.plotly_chart(fig_comp, use_container_width=True)
 
-    # Batch Prediction Section
     st.markdown("---")
     with st.expander("📁 Batch Prediction Tool (Upload CSV)", expanded=False):
         st.write("Upload a CSV file containing concrete mix parameters to run batch predictions across all research models.")
@@ -431,7 +437,7 @@ if page == "🧪 Interactive Predictor":
 # ----------------------------------------------------
 # PAGE 2: MODEL COMPARISON & BENCHMARKS
 # ----------------------------------------------------
-elif page == "📊 Model Comparison & Benchmarks":
+elif "Comparison" in page_str or "Benchmark" in page_str:
     st.markdown("""
     <div class="hero-banner">
         <h1 class="hero-title">📊 Model Comparison & Performance Benchmarks</h1>
@@ -443,7 +449,6 @@ elif page == "📊 Model Comparison & Benchmarks":
     cv_df = datasets.get('cv', pd.DataFrame())
     test_pred_df = datasets.get('test_pred', pd.DataFrame())
     
-    # Top KPI Metrics
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     with kpi1:
         st.markdown("""
@@ -487,11 +492,7 @@ elif page == "📊 Model Comparison & Benchmarks":
         if not comp_df.empty:
             c1, c2 = st.columns([1.2, 1])
             with c1:
-                st.dataframe(
-                    comp_df.style.highlight_max(axis=0, subset=['R2'], color='rgba(16,185,129,0.3)')
-                           .highlight_min(axis=0, subset=['MAE', 'RMSE'], color='rgba(16,185,129,0.3)'),
-                    use_container_width=True
-                )
+                st.dataframe(comp_df, use_container_width=True)
             with c2:
                 fig_r2 = px.bar(
                     comp_df,
@@ -579,7 +580,7 @@ elif page == "📊 Model Comparison & Benchmarks":
 # ----------------------------------------------------
 # PAGE 3: FEATURE ANALYSIS & SENSITIVITY
 # ----------------------------------------------------
-elif page == "🔍 Feature Analysis & Sensitivity":
+elif "Feature" in page_str or "Sensitivity" in page_str:
     st.markdown("""
     <div class="hero-banner">
         <h1 class="hero-title">🔍 Feature Importance & Mix Sensitivity Simulator</h1>
@@ -669,7 +670,7 @@ elif page == "🔍 Feature Analysis & Sensitivity":
 # ----------------------------------------------------
 # PAGE 4: RESEARCH DATASET EXPLORER
 # ----------------------------------------------------
-elif page == "📁 Research Dataset Explorer":
+elif "Explorer" in page_str:
     st.markdown("""
     <div class="hero-banner">
         <h1 class="hero-title">📁 Research Dataset Explorer & Download Center</h1>
@@ -734,7 +735,7 @@ elif page == "📁 Research Dataset Explorer":
 # ----------------------------------------------------
 # PAGE 5: RESEARCH SPECS & ARCHITECTURE
 # ----------------------------------------------------
-elif page == "ℹ️ Research Specs & Architecture":
+else:
     st.markdown("""
     <div class="hero-banner">
         <h1 class="hero-title">ℹ️ Research Architecture & Technical Specifications</h1>

@@ -2,7 +2,10 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import keras
+try:
+    import keras
+except ImportError:
+    keras = None
 import plotly.express as px
 import plotly.graph_objects as go
 import os
@@ -125,23 +128,27 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Helper function to load ANN
+# Helper function to load ANN weights / model
 def create_and_load_ann():
-    model = keras.Sequential([
-        keras.layers.Input(shape=(8,)),
-        keras.layers.Dense(128, activation='relu', name='dense_10'),
-        keras.layers.Dense(64, activation='relu', name='dense_11'),
-        keras.layers.Dropout(0.2, name='dropout_2'),
-        keras.layers.Dense(32, activation='relu', name='dense_12'),
-        keras.layers.Dense(16, activation='relu', name='dense_13'),
-        keras.layers.Dense(1, activation='linear', name='dense_14')
-    ])
-    if os.path.exists('ann_model.keras'):
-        try:
-            model.load_weights('ann_model.keras')
-        except Exception:
-            pass
-    return model
+    if os.path.exists('ann_weights.joblib'):
+        return joblib.load('ann_weights.joblib')
+    if keras is not None:
+        model = keras.Sequential([
+            keras.layers.Input(shape=(8,)),
+            keras.layers.Dense(128, activation='relu', name='dense_10'),
+            keras.layers.Dense(64, activation='relu', name='dense_11'),
+            keras.layers.Dropout(0.2, name='dropout_2'),
+            keras.layers.Dense(32, activation='relu', name='dense_12'),
+            keras.layers.Dense(16, activation='relu', name='dense_13'),
+            keras.layers.Dense(1, activation='linear', name='dense_14')
+        ])
+        if os.path.exists('ann_model.keras'):
+            try:
+                model.load_weights('ann_model.keras')
+            except Exception:
+                pass
+        return model
+    return None
 
 # Cache resources
 @st.cache_resource
@@ -202,16 +209,29 @@ st.sidebar.markdown("---")
 st.sidebar.caption("🔬 **Research Focus**: ML & ANN Modeling for Concrete Strength Prediction")
 st.sidebar.caption("✨ **Top Model**: XGBoost ($R^2 = 0.941$)")
 
+# Pure NumPy ANN inference
+def predict_ann(input_df):
+    scaled = ann_scaler.transform(input_df) if ann_scaler else input_df.values
+    ann_obj = models.get('Artificial Neural Network')
+    if isinstance(ann_obj, list): # ann_weights list
+        out = scaled
+        for W, b in ann_obj[:-1]:
+            out = np.maximum(0, np.dot(out, W) + b)
+        W_last, b_last = ann_obj[-1]
+        out = np.dot(out, W_last) + b_last
+        return float(out[0, 0]) if out.ndim > 1 else float(out[0])
+    elif ann_obj is not None and keras is not None:
+        return float(ann_obj.predict(scaled, verbose=0)[0, 0])
+    return 0.0
+
 # Prediction Helper Function
 def predict_strength(input_df, model_name):
     if model_name == "Hybrid XGBoost + ANN":
         xgb_p = float(models['XGBoost'].predict(input_df)[0])
-        ann_scaled = ann_scaler.transform(input_df) if ann_scaler else input_df
-        ann_p = float(models['Artificial Neural Network'].predict(ann_scaled, verbose=0)[0, 0])
+        ann_p = predict_ann(input_df)
         return (xgb_p + ann_p) / 2.0
     elif model_name == "Artificial Neural Network":
-        ann_scaled = ann_scaler.transform(input_df) if ann_scaler else input_df
-        return float(models['Artificial Neural Network'].predict(ann_scaled, verbose=0)[0, 0])
+        return predict_ann(input_df)
     else:
         return float(models[model_name].predict(input_df)[0])
 

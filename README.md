@@ -11,7 +11,9 @@ An interactive machine learning and deep learning research platform for predicti
 
 ## 📌 Research Overview
 
-Predicting the compressive strength of concrete is crucial in civil and structural engineering to ensure durability, safety, and material efficiency. This project evaluates multiple Machine Learning (ML) algorithms and an Artificial Neural Network (ANN), as well as a **Hybrid Ensemble Model** blending XGBoost and ANN predictions.
+Predicting the compressive strength of concrete is crucial in civil and structural engineering to ensure structural performance, material optimization, and safety. This research platform evaluates six standalone Machine Learning (ML) regressors and a 6-layer Deep Artificial Neural Network (ANN), alongside an operationally defined **Hybrid Equal-Weight Blending Ensemble** ($\hat{y}_{hybrid} = 0.5 \hat{y}_{XGBoost} + 0.5 \hat{y}_{ANN}$) across 1,030 empirical concrete formulations from the UCI Repository (Yeh, 1998).
+
+The evaluation pipeline enforces strict data leakage prevention: feature standard scaling ($z$-score) parameters are fit strictly on the 80% training set and evaluated across held-out test data (20%) and 10-fold cross-validation ($10-CV$). Feature attribution analysis and dynamic sensitivity simulations (1–180 days curing age, $w/c$ ratio) are integrated alongside an interactive Streamlit web application prototype for decision support.
 
 ### 📊 Model Performance Comparison
 
@@ -24,6 +26,12 @@ Predicting the compressive strength of concrete is crucial in civil and structur
 | **Support Vector Regressor (SVR)** | 4.02 | 5.97 | 0.880 |
 | **Artificial Neural Network (ANN)** | 4.30 | 6.10 | 0.875 |
 | **Linear Regression** | 8.90 | 11.19 | 0.580 |
+
+---
+
+> [!WARNING]
+> **Field Deployment & Recalibration Notice**:
+> The models function as interpolation tools bounded strictly by the empirical training dataset limits (Cement 102–540 kg/m³, Water 127–247 kg/m³, Age 1–365 days, lab moist curing ~20°C). Field engineers must recalibrate model parameters with local batch plant trial mixes before applying predictions in commercial structural compliance.
 
 ---
 
@@ -47,7 +55,7 @@ Predicting the compressive strength of concrete is crucial in civil and structur
 - **Output Layer**: Dense (1, Linear)
 - **Optimizer**: Adam (lr=0.001), Loss: MSE, Scaler: StandardScaler
 
-### Hybrid XGBoost + ANN Stacking Ensemble
+### Hybrid XGBoost + ANN Equal-Weight Blending Ensemble
 $$\hat{y}_{hybrid} = 0.5 \cdot \hat{y}_{XGBoost} + 0.5 \cdot \hat{y}_{ANN}$$
 
 ---
@@ -65,7 +73,12 @@ cd concrete-strength-ml-ann
 pip install -r requirements.txt
 ```
 
-### 3. Run Streamlit Application
+### 3. Reproduce All Models & Artifacts (Optional)
+```bash
+python train.py
+```
+
+### 4. Run Streamlit Application
 ```bash
 streamlit run app.py
 ```
@@ -78,6 +91,7 @@ Open your browser at `http://localhost:8501`.
 
 ```
 ├── app.py                      # Main Streamlit web application
+├── train.py                    # Full training pipeline (reproduces all artifacts)
 ├── requirements.txt            # Python dependencies
 ├── README.md                   # Project documentation
 ├── xgboost.joblib              # Saved XGBoost model

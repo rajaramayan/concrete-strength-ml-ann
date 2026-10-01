@@ -645,6 +645,8 @@ Output  :   1 unit,  Linear  -> MPa
 | Strength range | 2.33 – 82.60 MPa |
 | Source | I-Cheng Yeh, 1998 (UCI ML Repository) |
         """)
+        st.warning("⚠️ **Operational Scope & Recalibration Notice:** This deployment operates strictly as an interpolation utility within empirical dataset boundaries (Cement 102–540 kg/m³, Water 127–247 kg/m³, Age 1–365 days, lab curing ~20°C). Models do not explicitly account for aggregate mineralogy, cement chemical composition, ambient curing temperature, or specific admixture brand formulations. Field engineers must recalibrate model parameters using local batch plant trial mix data before commercial structural compliance deployment.")
+
         st.caption("Concrete Compressive Strength ML & ANN Research "
                    "| Streamlit · XGBoost · Scikit-Learn · Keras")
     except Exception:

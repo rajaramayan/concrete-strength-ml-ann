@@ -224,6 +224,12 @@ def _ann_predict(m, scaler, X_df):
     X   = scaler.transform(X_df) if scaler is not None else X_df.values
     if ann is None:
         return np.zeros(len(X_df))
+    if isinstance(ann, dict):
+        weights = [ann[f"layer_{i}"] for i in range(len(ann))]
+        out = X
+        for i in range(0, len(weights) - 2, 2):
+            out = np.maximum(0, out @ weights[i] + weights[i+1])
+        return (out @ weights[-2] + weights[-1]).flatten()
     if isinstance(ann, list):
         out = X
         for W, b in ann[:-1]:
